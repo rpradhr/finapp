@@ -1,0 +1,26 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import Layout from './components/layout/Layout';
+import Overview from './pages/Overview';
+import Trends from './pages/Trends';
+import Categories from './pages/Categories';
+import Transactions from './pages/Transactions';
+import Import from './pages/Import';
+import Assistant from './pages/Assistant';
+import Settings from './pages/Settings';
+
+export default function App() {
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/overview" replace />} />
+        <Route path="/overview" element={<Overview />} />
+        <Route path="/trends" element={<Trends />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/transactions" element={<Transactions />} />
+        <Route path="/import" element={<Import />} />
+        <Route path="/assistant" element={<Assistant />} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </Layout>
+  );
+}
