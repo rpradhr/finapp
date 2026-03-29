@@ -10,7 +10,11 @@ pub fn get_settings(
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
     let mut settings = HashMap::new();
 
-    let keys = ["ai_provider", "theme", "ai_api_key"];
+    let keys = [
+        "ai_provider", "theme", "ai_api_key",
+        "gmail_client_id", "gmail_client_secret",
+        "gmail_access_token", "gmail_refresh_token",
+    ];
     for key in keys {
         if let Ok(Some(val)) = db.get_setting(key) {
             settings.insert(key.to_string(), val);
