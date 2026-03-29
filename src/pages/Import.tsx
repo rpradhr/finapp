@@ -1,13 +1,40 @@
 import { useState, useEffect } from 'react';
 import {
-  Box, Card, CardContent, Typography, Button, Alert, LinearProgress,
+  Box, Card, CardContent, Typography, Alert, LinearProgress,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Grid, Chip, CircularProgress,
+  Grid, Chip,
 } from '@mui/material';
-import { CloudUpload as UploadIcon, CheckCircle as CheckIcon } from '@mui/icons-material';
+import { CloudUpload as CloudUploadIcon } from '@mui/icons-material';
 import { open } from '@tauri-apps/plugin-dialog';
 import * as api from '../services/api';
 import type { ImportSummary, ImportBatch, PaginatedResult, DataQualityIssue } from '../types';
+
+interface StatBoxProps {
+  label: string;
+  value: number | string;
+  bg: string;
+  color: string;
+}
+
+function StatBox({ label, value, bg, color }: StatBoxProps) {
+  return (
+    <Box
+      sx={{
+        borderRadius: '12px',
+        p: 2,
+        textAlign: 'center',
+        backgroundColor: bg,
+      }}
+    >
+      <Typography variant="h5" fontWeight={700} sx={{ color, lineHeight: 1.2 }}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </Typography>
+      <Typography variant="caption" sx={{ color: '#5f6368', mt: 0.5, display: 'block' }}>
+        {label}
+      </Typography>
+    </Box>
+  );
+}
 
 export default function Import() {
   const [importing, setImporting] = useState(false);
@@ -15,6 +42,7 @@ export default function Import() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<ImportBatch[]>([]);
   const [qualityIssues, setQualityIssues] = useState<PaginatedResult<DataQualityIssue> | null>(null);
+  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     api.getImportHistory().then(setHistory).catch(console.error);
@@ -37,7 +65,6 @@ export default function Import() {
       const result = await api.importSpreadsheet(filePath as string);
       setSummary(result);
 
-      // Refresh data
       const [h, q] = await Promise.all([
         api.getImportHistory(),
         api.getDataQualityIssues(1, 20),
@@ -63,52 +90,99 @@ export default function Import() {
 
   return (
     <Box>
-      {/* Import Section */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Import Spreadsheet</Typography>
-          <Typography color="text.secondary" mb={2}>
-            Import your family expense spreadsheet (.xlsx). The app will parse, validate, and normalize all transactions.
-            Re-importing will update existing imported records while preserving manually added expenses.
-          </Typography>
+      {/* Upload Zone */}
+      <Box
+        onClick={!importing ? handleImport : undefined}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        sx={{
+          border: '2px dashed',
+          borderColor: hovered ? '#1a73e8' : '#dadce0',
+          borderRadius: '16px',
+          p: 6,
+          textAlign: 'center',
+          cursor: importing ? 'default' : 'pointer',
+          backgroundColor: hovered && !importing ? '#f8f9fa' : 'transparent',
+          transition: 'all 0.2s ease',
+          mb: 3,
+        }}
+      >
+        <CloudUploadIcon sx={{ fontSize: 64, color: '#1a73e8', mb: 2 }} />
+        <Typography variant="h6" fontWeight={600} sx={{ color: '#202124', mb: 0.5 }}>
+          Select & Import Spreadsheet
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480, mx: 'auto' }}>
+          Import your family expense spreadsheet (.xlsx). The app will parse, validate, and normalize all transactions.
+          Re-importing will update existing imported records while preserving manually added expenses.
+        </Typography>
 
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={<UploadIcon />}
-            onClick={handleImport}
-            disabled={importing}
-          >
-            {importing ? 'Importing...' : 'Select & Import Spreadsheet'}
-          </Button>
+        {importing && (
+          <LinearProgress
+            sx={{
+              mt: 3,
+              mx: 'auto',
+              maxWidth: 400,
+              borderRadius: '4px',
+              height: 6,
+              backgroundColor: '#e8eaed',
+              '& .MuiLinearProgress-bar': {
+                borderRadius: '4px',
+              },
+            }}
+          />
+        )}
+      </Box>
 
-          {importing && <LinearProgress sx={{ mt: 2 }} />}
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3, borderRadius: '12px' }}>
+          {error}
+        </Alert>
+      )}
 
-          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-
-          {summary && (
-            <Alert severity="success" sx={{ mt: 2 }} icon={<CheckIcon />}>
-              <Typography variant="subtitle2">Import Complete</Typography>
-              <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                <Grid size={4}><Typography variant="body2">Total rows: {summary.total_rows}</Typography></Grid>
-                <Grid size={4}><Typography variant="body2">Imported: {summary.imported_rows}</Typography></Grid>
-                <Grid size={4}><Typography variant="body2">Updated: {summary.updated_rows}</Typography></Grid>
-                <Grid size={4}><Typography variant="body2">Errors: {summary.error_rows}</Typography></Grid>
-                <Grid size={4}><Typography variant="body2">Warnings: {summary.warning_rows}</Typography></Grid>
-                <Grid size={4}><Typography variant="body2">Merchants: {summary.merchants_imported}</Typography></Grid>
-                <Grid size={4}><Typography variant="body2">Categories: {summary.categories_imported}</Typography></Grid>
-                <Grid size={4}><Typography variant="body2">Quality issues: {summary.quality_issues_imported}</Typography></Grid>
+      {/* Import Summary */}
+      {summary && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2.5, color: '#202124' }}>
+              Import Summary
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatBox label="Total Rows" value={summary.total_rows} bg="#e8f0fe" color="#1a73e8" />
               </Grid>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatBox label="Imported" value={summary.imported_rows} bg="#e6f4ea" color="#34a853" />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatBox label="Updated" value={summary.updated_rows} bg="#e8f0fe" color="#1a73e8" />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatBox label="Errors" value={summary.error_rows} bg="#fce8e6" color="#ea4335" />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatBox label="Warnings" value={summary.warning_rows} bg="#fef7e0" color="#f9ab00" />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatBox label="Merchants" value={summary.merchants_imported} bg="#e8f0fe" color="#1a73e8" />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatBox label="Categories" value={summary.categories_imported} bg="#e8f0fe" color="#1a73e8" />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatBox label="Quality Issues" value={summary.quality_issues_imported} bg="#fef7e0" color="#f9ab00" />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Import History */}
       {history.length > 0 && (
         <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>Import History</Typography>
+          <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2, color: '#202124' }}>
+              Import History
+            </Typography>
             <TableContainer>
               <Table size="small">
                 <TableHead>
@@ -123,14 +197,31 @@ export default function Import() {
                 </TableHead>
                 <TableBody>
                   {history.map((batch) => (
-                    <TableRow key={batch.id}>
-                      <TableCell>{new Date(batch.imported_at).toLocaleDateString()}</TableCell>
-                      <TableCell>{batch.filename}</TableCell>
-                      <TableCell align="right">{batch.total_rows}</TableCell>
-                      <TableCell align="right">{batch.imported_rows}</TableCell>
-                      <TableCell align="right">{batch.error_rows}</TableCell>
+                    <TableRow
+                      key={batch.id}
+                      sx={{
+                        '&:hover': { backgroundColor: '#f8f9fa' },
+                        transition: 'background-color 0.15s ease',
+                      }}
+                    >
+                      <TableCell sx={{ whiteSpace: 'nowrap', color: '#202124' }}>
+                        {new Date(batch.imported_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </TableCell>
+                      <TableCell sx={{ color: '#3c4043' }}>{batch.filename}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 500 }}>{batch.total_rows}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 500, color: '#34a853' }}>{batch.imported_rows}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 500, color: batch.error_rows ? '#ea4335' : '#5f6368' }}>{batch.error_rows}</TableCell>
                       <TableCell>
-                        <Chip label={batch.status} size="small" color={batch.status === 'completed' ? 'success' : 'warning'} />
+                        <Chip
+                          label={batch.status}
+                          size="small"
+                          variant={batch.status === 'completed' ? 'filled' : 'outlined'}
+                          sx={
+                            batch.status === 'completed'
+                              ? { backgroundColor: '#e6f4ea', color: '#34a853', fontWeight: 500 }
+                              : { borderColor: '#f9ab00', color: '#f9ab00', fontWeight: 500 }
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -144,12 +235,12 @@ export default function Import() {
       {/* Data Quality Issues */}
       {qualityIssues && qualityIssues.total > 0 && (
         <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Data Quality Issues ({qualityIssues.total})
+          <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5, color: '#202124' }}>
+              Data Quality Issues
             </Typography>
-            <Typography color="text.secondary" mb={2}>
-              These transactions need review. Click a category to re-categorize.
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {qualityIssues.total} transaction{qualityIssues.total !== 1 ? 's' : ''} need review. Click a category to re-categorize.
             </Typography>
             <TableContainer>
               <Table size="small">
@@ -164,18 +255,41 @@ export default function Import() {
                 </TableHead>
                 <TableBody>
                   {qualityIssues.data.map((issue) => (
-                    <TableRow key={issue.id} hover>
-                      <TableCell>{issue.transaction_date}</TableCell>
-                      <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <TableRow
+                      key={issue.id}
+                      sx={{
+                        '&:hover': { backgroundColor: '#f8f9fa' },
+                        transition: 'background-color 0.15s ease',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => {
+                        if (issue.data_quality_status === 'flagged') {
+                          const newCat = prompt('Enter new category:', issue.category);
+                          if (newCat) handleResolveIssue(issue.id, newCat);
+                        }
+                      }}
+                    >
+                      <TableCell sx={{ whiteSpace: 'nowrap', color: '#202124' }}>
+                        {issue.transaction_date}
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#3c4043' }}>
                         {issue.raw_description || '-'}
                       </TableCell>
-                      <TableCell align="right">${issue.amount.toFixed(2)}</TableCell>
-                      <TableCell>{issue.data_quality_issue || '-'}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, color: '#ea4335', whiteSpace: 'nowrap' }}>
+                        ${issue.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell sx={{ color: '#5f6368', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {issue.data_quality_issue || '-'}
+                      </TableCell>
                       <TableCell>
                         <Chip
                           label={issue.data_quality_status}
                           size="small"
-                          color={issue.data_quality_status === 'flagged' ? 'warning' : 'success'}
+                          sx={
+                            issue.data_quality_status === 'flagged'
+                              ? { backgroundColor: '#fef7e0', color: '#f9ab00', fontWeight: 500 }
+                              : { backgroundColor: '#e6f4ea', color: '#34a853', fontWeight: 500 }
+                          }
                         />
                       </TableCell>
                     </TableRow>

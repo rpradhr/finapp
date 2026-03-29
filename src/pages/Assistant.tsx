@@ -1,19 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Box, Card, CardContent, Typography, TextField, IconButton, Paper, Chip,
+  Box, Card, Typography, TextField, IconButton, Chip,
 } from '@mui/material';
-import { Send as SendIcon } from '@mui/icons-material';
+import {
+  Send as SendIcon,
+  Person as PersonIcon,
+  AutoAwesome as AutoAwesomeIcon,
+} from '@mui/icons-material';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line,
+  PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts';
 import { processUserMessage } from '../services/ai';
-import { CHART_COLORS } from '../theme';
+import { CHART_COLORS, formatCompactCurrency, CUSTOM_TOOLTIP_STYLE } from '../theme';
 import type { ChatMessage } from '../types';
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
-}
 
 const SUGGESTIONS = [
   'How much did I spend on groceries in 2023?',
@@ -22,6 +22,12 @@ const SUGGESTIONS = [
   'Summarize 2024',
   'Add $50 for groceries at Wegmans',
 ];
+
+function renderMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br/>');
+}
 
 export default function Assistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -77,96 +83,263 @@ export default function Assistant() {
     if (data.length === 0) return null;
 
     return (
-      <Box sx={{ mt: 2, height: 200 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          {msg.chart === 'bar' ? (
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={data[0]?.year_month ? 'year_month' : 'category'} tick={{ fontSize: 10 }} />
-              <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-              <Bar dataKey="total" fill="#1565c0" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          ) : msg.chart === 'pie' ? (
-            <PieChart>
-              <Pie data={data} dataKey="total" nameKey="category" cx="50%" cy="50%" outerRadius={80}>
-                {data.map((_: unknown, idx: number) => (
-                  <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-            </PieChart>
-          ) : (
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year_month" tick={{ fontSize: 10 }} />
-              <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-              <Line type="monotone" dataKey="total" stroke="#1565c0" />
-            </LineChart>
-          )}
-        </ResponsiveContainer>
-      </Box>
+      <Card sx={{ borderRadius: 3, overflow: 'hidden', mt: 1.5 }}>
+        <Box sx={{ height: 200, p: 1 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            {msg.chart === 'bar' ? (
+              <BarChart data={data} barCategoryGap="20%">
+                <defs>
+                  <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#1a73e8" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#1a73e8" stopOpacity={0.5} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey={data[0]?.year_month ? 'year_month' : 'category'}
+                  tick={{ fontSize: 10 }}
+                />
+                <YAxis tickFormatter={(v) => formatCompactCurrency(v)} tick={{ fontSize: 10 }} />
+                <Tooltip
+                  {...CUSTOM_TOOLTIP_STYLE}
+                  formatter={(v) => formatCompactCurrency(Number(v))}
+                />
+                <Bar
+                  dataKey="total"
+                  fill="url(#barGrad)"
+                  radius={[6, 6, 0, 0]}
+                  animationDuration={800}
+                />
+              </BarChart>
+            ) : msg.chart === 'pie' ? (
+              <PieChart>
+                <Pie
+                  data={data}
+                  dataKey="total"
+                  nameKey="category"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  animationDuration={800}
+                >
+                  {data.map((_: unknown, idx: number) => (
+                    <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  {...CUSTOM_TOOLTIP_STYLE}
+                  formatter={(v) => formatCompactCurrency(Number(v))}
+                />
+              </PieChart>
+            ) : (
+              <AreaChart data={data}>
+                <defs>
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#1a73e8" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#1a73e8" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="year_month" tick={{ fontSize: 10 }} />
+                <YAxis tickFormatter={(v) => formatCompactCurrency(v)} tick={{ fontSize: 10 }} />
+                <Tooltip
+                  {...CUSTOM_TOOLTIP_STYLE}
+                  formatter={(v) => formatCompactCurrency(Number(v))}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="total"
+                  stroke="#1a73e8"
+                  strokeWidth={2}
+                  fill="url(#areaGrad)"
+                  animationDuration={800}
+                />
+              </AreaChart>
+            )}
+          </ResponsiveContainer>
+        </Box>
+      </Card>
     );
   };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
-      {/* Messages */}
-      <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
+      {/* Messages area */}
+      <Box sx={{ flex: 1, overflow: 'auto', mb: 2, px: 1 }}>
         {messages.map((msg) => (
           <Box
             key={msg.id}
             sx={{
               display: 'flex',
               justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              alignItems: 'flex-end',
+              gap: 1,
               mb: 2,
             }}
           >
-            <Paper
-              sx={{
-                p: 2,
-                maxWidth: '70%',
-                backgroundColor: msg.role === 'user' ? 'primary.main' : 'grey.100',
-                color: msg.role === 'user' ? 'white' : 'text.primary',
-                borderRadius: 2,
-              }}
-            >
-              <Typography
-                variant="body2"
-                sx={{ whiteSpace: 'pre-wrap' }}
-                dangerouslySetInnerHTML={{
-                  __html: msg.content
-                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\n/g, '<br/>'),
+            {/* Assistant avatar */}
+            {msg.role === 'assistant' && (
+              <Box
+                sx={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #1a73e8, #8e24aa)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
                 }}
-              />
-              {renderChart(msg)}
-            </Paper>
+              >
+                <AutoAwesomeIcon sx={{ color: 'white', fontSize: 18 }} />
+              </Box>
+            )}
+
+            {/* Message bubble */}
+            <Box sx={{ maxWidth: '70%' }}>
+              <Box
+                sx={{
+                  p: 2,
+                  ...(msg.role === 'user'
+                    ? {
+                        background: '#1a73e8',
+                        color: 'white',
+                        borderRadius: '20px 20px 4px 20px',
+                        ml: 'auto',
+                      }
+                    : {
+                        background: '#f8f9fa',
+                        borderRadius: '20px 20px 20px 4px',
+                        borderLeft: '3px solid #1a73e8',
+                      }),
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+                  dangerouslySetInnerHTML={{
+                    __html: renderMarkdown(msg.content),
+                  }}
+                />
+              </Box>
+              {msg.role === 'assistant' && renderChart(msg)}
+            </Box>
+
+            {/* User avatar */}
+            {msg.role === 'user' && (
+              <Box
+                sx={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: '#1a73e8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <PersonIcon sx={{ color: 'white', fontSize: 18 }} />
+              </Box>
+            )}
           </Box>
         ))}
+
+        {/* Typing indicator */}
         {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
-            <Paper sx={{ p: 2, backgroundColor: 'grey.100', borderRadius: 2 }}>
-              <Typography variant="body2">Thinking...</Typography>
-            </Paper>
+          <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, mb: 2 }}>
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #1a73e8, #8e24aa)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <AutoAwesomeIcon sx={{ color: 'white', fontSize: 18 }} />
+            </Box>
+            <Box
+              sx={{
+                background: '#f8f9fa',
+                borderRadius: '20px 20px 20px 4px',
+                borderLeft: '3px solid #1a73e8',
+                p: 2,
+                display: 'flex',
+                gap: '6px',
+                alignItems: 'center',
+                '@keyframes bounce': {
+                  '0%, 60%, 100%': { transform: 'translateY(0)' },
+                  '30%': { transform: 'translateY(-8px)' },
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: '#1a73e8',
+                  animation: 'bounce 1.2s infinite',
+                  animationDelay: '0s',
+                }}
+              />
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: '#1a73e8',
+                  animation: 'bounce 1.2s infinite',
+                  animationDelay: '0.15s',
+                }}
+              />
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: '#1a73e8',
+                  animation: 'bounce 1.2s infinite',
+                  animationDelay: '0.3s',
+                }}
+              />
+            </Box>
           </Box>
         )}
+
         <div ref={messagesEndRef} />
       </Box>
 
-      {/* Suggestions */}
+      {/* Suggestion chips */}
       {messages.length <= 1 && (
-        <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap', px: 1 }}>
           {SUGGESTIONS.map((s) => (
-            <Chip key={s} label={s} onClick={() => handleSend(s)} clickable variant="outlined" />
+            <Chip
+              key={s}
+              label={s}
+              onClick={() => handleSend(s)}
+              clickable
+              variant="outlined"
+              sx={{
+                borderRadius: 20,
+                border: '1px solid #e0e0e0',
+                '&:hover': {
+                  backgroundColor: '#e8f0fe',
+                  borderColor: '#1a73e8',
+                },
+              }}
+            />
           ))}
         </Box>
       )}
 
-      {/* Input */}
-      <Card>
-        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 }, display: 'flex', gap: 1 }}>
+      {/* Input area */}
+      <Card sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           <TextField
             fullWidth
             size="small"
@@ -175,11 +348,33 @@ export default function Assistant() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             disabled={loading}
+            InputProps={{
+              sx: {
+                borderRadius: '24px',
+              },
+            }}
           />
-          <IconButton color="primary" onClick={() => handleSend()} disabled={!input.trim() || loading}>
-            <SendIcon />
+          <IconButton
+            onClick={() => handleSend()}
+            disabled={!input.trim() || loading}
+            sx={{
+              backgroundColor: '#1a73e8',
+              color: 'white',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              '&:hover': {
+                backgroundColor: '#0d47a1',
+              },
+              '&.Mui-disabled': {
+                backgroundColor: '#e0e0e0',
+                color: '#9e9e9e',
+              },
+            }}
+          >
+            <SendIcon fontSize="small" />
           </IconButton>
-        </CardContent>
+        </Box>
       </Card>
     </Box>
   );

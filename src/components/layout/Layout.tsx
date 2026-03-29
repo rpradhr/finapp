@@ -1,127 +1,235 @@
-import { ReactNode, useState } from 'react';
+import { useState } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText,
-  Toolbar, Typography, AppBar, IconButton, Divider,
+  Typography, IconButton, useMediaQuery, useTheme, AppBar, Toolbar,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
   TrendingUp as TrendingUpIcon,
   Category as CategoryIcon,
   Receipt as ReceiptIcon,
-  CloudUpload as ImportIcon,
+  CloudUpload as UploadIcon,
   SmartToy as AssistantIcon,
   Settings as SettingsIcon,
   Menu as MenuIcon,
+  TableChart as SpreadsheetIcon,
+  Email as EmailIcon,
+  ShoppingCart as AmazonIcon,
 } from '@mui/icons-material';
-import { useNavigate, useLocation } from 'react-router-dom';
 
-const DRAWER_WIDTH = 240;
+const DRAWER_WIDTH = 260;
 
-const NAV_ITEMS = [
-  { path: '/overview', label: 'Overview', icon: <DashboardIcon /> },
-  { path: '/trends', label: 'Trends', icon: <TrendingUpIcon /> },
-  { path: '/categories', label: 'Categories', icon: <CategoryIcon /> },
-  { path: '/transactions', label: 'Transactions', icon: <ReceiptIcon /> },
-  { path: '/import', label: 'Import', icon: <ImportIcon /> },
-  { path: '/assistant', label: 'AI Assistant', icon: <AssistantIcon /> },
-  { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
+interface NavGroup {
+  label: string;
+  items: { text: string; icon: React.ReactNode; path: string }[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'ANALYTICS',
+    items: [
+      { text: 'Overview', icon: <DashboardIcon />, path: '/overview' },
+      { text: 'Trends', icon: <TrendingUpIcon />, path: '/trends' },
+      { text: 'Categories', icon: <CategoryIcon />, path: '/categories' },
+    ],
+  },
+  {
+    label: 'MANAGE',
+    items: [
+      { text: 'Transactions', icon: <ReceiptIcon />, path: '/transactions' },
+      { text: 'Spreadsheet', icon: <SpreadsheetIcon />, path: '/spreadsheet' },
+      { text: 'Import', icon: <UploadIcon />, path: '/import' },
+      { text: 'Gmail Import', icon: <EmailIcon />, path: '/gmail' },
+      { text: 'Amazon Orders', icon: <AmazonIcon />, path: '/amazon' },
+    ],
+  },
+  {
+    label: 'TOOLS',
+    items: [
+      { text: 'AI Assistant', icon: <AssistantIcon />, path: '/assistant' },
+      { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+    ],
+  },
 ];
 
-export default function Layout({ children }: { children: ReactNode }) {
+const ALL_ITEMS = NAV_GROUPS.flatMap(g => g.items);
+
+export default function Layout() {
+  const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
 
-  const drawer = (
-    <Box>
-      <Toolbar>
-        <Typography variant="h6" noWrap sx={{ fontWeight: 700, color: 'primary.main' }}>
+  const currentPage = ALL_ITEMS.find(
+    item => location.pathname === item.path || (item.path === '/overview' && location.pathname === '/')
+  );
+
+  const drawerContent = (
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Brand Area */}
+      <Box
+        sx={{
+          background: 'linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%)',
+          px: 3,
+          py: 3.5,
+          mb: 1,
+        }}
+      >
+        <Typography variant="h5" sx={{ color: 'white', fontWeight: 800, letterSpacing: '-0.02em' }}>
           FinApp
         </Typography>
-      </Toolbar>
-      <Divider />
-      <List>
-        {NAV_ITEMS.map((item) => (
-          <ListItemButton
-            key={item.path}
-            selected={location.pathname === item.path}
-            onClick={() => { navigate(item.path); setMobileOpen(false); }}
-            sx={{
-              mx: 1,
-              borderRadius: 2,
-              mb: 0.5,
-              '&.Mui-selected': {
-                backgroundColor: 'primary.main',
-                color: 'white',
-                '& .MuiListItemIcon-root': { color: 'white' },
-                '&:hover': { backgroundColor: 'primary.dark' },
-              },
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} />
-          </ListItemButton>
+        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5, display: 'block' }}>
+          Family Expenses
+        </Typography>
+      </Box>
+
+      {/* Navigation Groups */}
+      <Box sx={{ flex: 1, px: 1.5, py: 1 }}>
+        {NAV_GROUPS.map((group) => (
+          <Box key={group.label} sx={{ mb: 2 }}>
+            <Typography
+              variant="overline"
+              sx={{
+                color: '#5f6368',
+                px: 1.5,
+                mb: 0.5,
+                display: 'block',
+                fontSize: '0.65rem',
+                letterSpacing: '0.1em',
+              }}
+            >
+              {group.label}
+            </Typography>
+            <List disablePadding>
+              {group.items.map((item) => {
+                const isSelected = location.pathname === item.path ||
+                  (item.path === '/overview' && location.pathname === '/');
+                return (
+                  <ListItemButton
+                    key={item.text}
+                    onClick={() => {
+                      navigate(item.path);
+                      if (isMobile) setMobileOpen(false);
+                    }}
+                    sx={{
+                      borderRadius: '24px',
+                      mx: 0.5,
+                      mb: 0.3,
+                      py: 1,
+                      px: 2,
+                      backgroundColor: isSelected ? '#e8f0fe' : 'transparent',
+                      color: isSelected ? '#1a73e8' : '#3c4043',
+                      '&:hover': {
+                        backgroundColor: isSelected ? '#d2e3fc' : '#f1f3f4',
+                      },
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        color: isSelected ? '#1a73e8' : '#5f6368',
+                        minWidth: 40,
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.text}
+                      primaryTypographyProps={{
+                        fontWeight: isSelected ? 600 : 400,
+                        fontSize: '0.875rem',
+                      }}
+                    />
+                  </ListItemButton>
+                );
+              })}
+            </List>
+          </Box>
         ))}
-      </List>
+      </Box>
     </Box>
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <AppBar
-        position="fixed"
-        sx={{
-          width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-          ml: { md: `${DRAWER_WIDTH}px` },
-          backgroundColor: 'white',
-          color: 'text.primary',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-        }}
-      >
-        <Toolbar>
-          <IconButton
-            edge="start"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            sx={{ mr: 2, display: { md: 'none' } }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap>
-            {NAV_ITEMS.find(i => i.path === location.pathname)?.label || 'Family Expense App'}
-          </Typography>
-        </Toolbar>
-      </AppBar>
+    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+      {/* Mobile AppBar */}
+      {isMobile && (
+        <AppBar
+          position="fixed"
+          elevation={0}
+          sx={{
+            backgroundColor: 'white',
+            borderBottom: '1px solid #e8eaed',
+          }}
+        >
+          <Toolbar>
+            <IconButton edge="start" onClick={() => setMobileOpen(!mobileOpen)} sx={{ mr: 2 }}>
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="h6" sx={{ color: '#202124' }}>
+              {currentPage?.text || 'FinApp'}
+            </Typography>
+          </Toolbar>
+        </AppBar>
+      )}
 
-      <Box component="nav" sx={{ width: { md: DRAWER_WIDTH }, flexShrink: { md: 0 } }}>
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-          sx={{ display: { xs: 'block', md: 'none' }, '& .MuiDrawer-paper': { width: DRAWER_WIDTH } }}
-        >
-          {drawer}
-        </Drawer>
-        <Drawer
-          variant="permanent"
-          sx={{ display: { xs: 'none', md: 'block' }, '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' } }}
-          open
-        >
-          {drawer}
-        </Drawer>
+      {/* Sidebar */}
+      <Box component="nav" sx={{ width: { md: DRAWER_WIDTH }, flexShrink: 0 }}>
+        {isMobile ? (
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={() => setMobileOpen(false)}
+            ModalProps={{ keepMounted: true }}
+            sx={{
+              '& .MuiDrawer-paper': {
+                width: DRAWER_WIDTH,
+                borderRight: 'none',
+              },
+            }}
+          >
+            {drawerContent}
+          </Drawer>
+        ) : (
+          <Drawer
+            variant="permanent"
+            sx={{
+              '& .MuiDrawer-paper': {
+                width: DRAWER_WIDTH,
+                borderRight: 'none',
+                boxShadow: '1px 0 4px rgba(0,0,0,0.03)',
+                backgroundColor: 'white',
+              },
+            }}
+            open
+          >
+            {drawerContent}
+          </Drawer>
+        )}
       </Box>
 
+      {/* Main Content */}
       <Box
         component="main"
         sx={{
-          flexGrow: 1,
-          p: 3,
-          width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-          mt: '64px',
-          minHeight: 'calc(100vh - 64px)',
-          backgroundColor: 'background.default',
+          flex: 1,
+          p: { xs: 2, md: 4 },
+          mt: isMobile ? '64px' : 0,
+          maxWidth: '100%',
+          overflow: 'auto',
         }}
       >
-        {children}
+        {/* Page Header */}
+        {!isMobile && currentPage && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h5" sx={{ color: '#202124', fontWeight: 700 }}>
+              {currentPage.text}
+            </Typography>
+          </Box>
+        )}
+        <Outlet />
       </Box>
     </Box>
   );

@@ -7,11 +7,14 @@ import Transactions from './pages/Transactions';
 import Import from './pages/Import';
 import Assistant from './pages/Assistant';
 import Settings from './pages/Settings';
+import Spreadsheet from './pages/Spreadsheet';
+import GmailImport from './pages/GmailImport';
+import AmazonImport from './pages/AmazonImport';
 
 export default function App() {
   return (
-    <Layout>
-      <Routes>
+    <Routes>
+      <Route element={<Layout />}>
         <Route path="/" element={<Navigate to="/overview" replace />} />
         <Route path="/overview" element={<Overview />} />
         <Route path="/trends" element={<Trends />} />
@@ -19,8 +22,11 @@ export default function App() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/import" element={<Import />} />
         <Route path="/assistant" element={<Assistant />} />
+        <Route path="/spreadsheet" element={<Spreadsheet />} />
+        <Route path="/gmail" element={<GmailImport />} />
+        <Route path="/amazon" element={<AmazonImport />} />
         <Route path="/settings" element={<Settings />} />
-      </Routes>
-    </Layout>
+      </Route>
+    </Routes>
   );
 }
