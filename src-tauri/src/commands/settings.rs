@@ -11,7 +11,9 @@ pub fn get_settings(
     let mut settings = HashMap::new();
 
     let keys = [
-        "ai_provider", "theme", "ai_api_key",
+        "ai_provider", "ai_model", "theme",
+        "ai_api_key", "ai_api_key_openai", "ai_api_key_gemini", "ai_api_key_custom",
+        "ai_custom_endpoint",
         "gmail_client_id", "gmail_client_secret",
         "gmail_access_token", "gmail_refresh_token",
     ];

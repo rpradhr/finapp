@@ -136,7 +136,7 @@ export default function GmailImport() {
       setOrders(fetchedOrders);
 
       if (fetchedOrders.length === 0) {
-        setSnackMsg('No order emails found in the last 30 days');
+        setSnackMsg('No order emails found in the last 4 weeks');
         setSnackOpen(true);
       }
     } catch (err) {

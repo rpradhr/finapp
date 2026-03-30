@@ -9,6 +9,98 @@ export interface AIProvider {
   generateInsights(categories: CategoryBreakdown[], monthly: MonthlySpending[], yearly: YearlySpending[]): Promise<Insight[]>;
 }
 
+// ─── LLM Provider (Claude / OpenAI / Gemini / Custom) ─────────────────────
+
+interface LLMConfig {
+  provider: 'claude' | 'openai' | 'gemini' | 'custom';
+  apiKey: string;
+  endpoint?: string;
+}
+
+function getLLMEndpoint(config: LLMConfig): string {
+  switch (config.provider) {
+    case 'claude': return 'https://api.anthropic.com/v1/messages';
+    case 'openai': return 'https://api.openai.com/v1/chat/completions';
+    case 'gemini': return 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+    case 'custom': return config.endpoint || '';
+  }
+}
+
+function getLLMModel(provider: string): string {
+  switch (provider) {
+    case 'claude': return 'claude-sonnet-4-6';
+    case 'openai': return 'gpt-4o';
+    case 'gemini': return 'gemini-2.5-flash';
+    default: return 'gpt-4o';
+  }
+}
+
+async function callLLM(config: LLMConfig, systemPrompt: string, userMessage: string): Promise<string> {
+  const endpoint = getLLMEndpoint(config);
+  if (!endpoint) throw new Error('No API endpoint configured');
+
+  if (config.provider === 'claude') {
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: getLLMModel('claude'),
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`Claude API error ${resp.status}: ${err}`);
+    }
+    const data = await resp.json();
+    return data.content?.[0]?.text || '';
+  }
+
+  // OpenAI / Gemini / Custom all use OpenAI-compatible format
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  if (config.provider === 'gemini') {
+    // Gemini's OpenAI-compatible endpoint uses Bearer token
+    headers['Authorization'] = `Bearer ${config.apiKey}`;
+  } else {
+    headers['Authorization'] = `Bearer ${config.apiKey}`;
+  }
+
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: getLLMModel(config.provider),
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`${config.provider} API error ${resp.status}: ${err}`);
+  }
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+const FINANCE_SYSTEM_PROMPT = `You are a helpful financial assistant for a family expense tracking app. You analyze spending data and answer questions about expenses.
+When the user asks about spending, provide clear, concise answers with dollar amounts formatted properly.
+Keep responses brief (2-4 sentences). Use **bold** for emphasis on key numbers and categories.
+Do not use markdown headers or bullet points unless listing multiple items.`;
+
+// ─── Local AI Provider (rule-based NLP) ────────────────────────────────────
+
 class LocalAIProvider implements AIProvider {
   name = 'local';
 
@@ -23,7 +115,6 @@ class LocalAIProvider implements AIProvider {
   ): Promise<Insight[]> {
     const insights: Insight[] = [];
 
-    // Top category insight
     if (categories.length > 0) {
       const top = categories[0];
       insights.push({
@@ -35,7 +126,6 @@ class LocalAIProvider implements AIProvider {
       });
     }
 
-    // Year-over-year change
     if (yearly.length >= 2) {
       const latest = yearly[yearly.length - 1];
       const previous = yearly[yearly.length - 2];
@@ -51,7 +141,6 @@ class LocalAIProvider implements AIProvider {
       }
     }
 
-    // Monthly anomaly detection (z-score based)
     if (monthly.length >= 6) {
       const totals = monthly.map(m => m.total);
       const mean = totals.reduce((a, b) => a + b, 0) / totals.length;
@@ -74,7 +163,6 @@ class LocalAIProvider implements AIProvider {
       }
     }
 
-    // Spending concentration
     if (categories.length >= 3) {
       const top3Pct = categories.slice(0, 3).reduce((sum, c) => sum + c.percentage, 0);
       if (top3Pct > 80) {
@@ -92,6 +180,40 @@ class LocalAIProvider implements AIProvider {
   }
 }
 
+// ─── External LLM Provider ────────────────────────────────────────────────
+
+class ExternalAIProvider implements AIProvider {
+  name: string;
+  private config: LLMConfig;
+
+  constructor(config: LLMConfig) {
+    this.name = config.provider;
+    this.config = config;
+  }
+
+  async parseIntent(input: string): Promise<ParsedIntent> {
+    // Still use local NLP for structured intent parsing (fast & reliable)
+    return parseIntent(input);
+  }
+
+  async generateInsights(
+    categories: CategoryBreakdown[],
+    monthly: MonthlySpending[],
+    yearly: YearlySpending[],
+  ): Promise<Insight[]> {
+    // Use local insights as a baseline — LLM enriches in chat
+    const local = new LocalAIProvider();
+    return local.generateInsights(categories, monthly, yearly);
+  }
+
+  async chat(userMessage: string, context: string): Promise<string> {
+    const systemPrompt = `${FINANCE_SYSTEM_PROMPT}\n\nHere is the relevant financial data:\n${context}`;
+    return callLLM(this.config, systemPrompt, userMessage);
+  }
+}
+
+// ─── Provider Manager ──────────────────────────────────────────────────────
+
 class AIProviderManager {
   private local: LocalAIProvider;
 
@@ -102,6 +224,33 @@ class AIProviderManager {
   getProvider(): AIProvider {
     return this.local;
   }
+
+  async getExternalProvider(): Promise<ExternalAIProvider | null> {
+    try {
+      const settings = await api.getSettings();
+      const provider = settings.ai_provider;
+
+      if (!provider || provider === 'local') return null;
+
+      const keyMap: Record<string, string> = {
+        claude: 'ai_api_key',
+        openai: 'ai_api_key_openai',
+        gemini: 'ai_api_key_gemini',
+        custom: 'ai_api_key_custom',
+      };
+
+      const apiKey = settings[keyMap[provider]];
+      if (!apiKey) return null;
+
+      return new ExternalAIProvider({
+        provider: provider as LLMConfig['provider'],
+        apiKey,
+        endpoint: settings.ai_custom_endpoint,
+      });
+    } catch {
+      return null;
+    }
+  }
 }
 
 const providerManager = new AIProviderManager();
@@ -110,9 +259,9 @@ export async function processUserMessage(input: string): Promise<ChatMessage> {
   const provider = providerManager.getProvider();
   const intent = await provider.parseIntent(input);
 
+  // For structured intents (add, compare, top, summarize), use local handler + data
+  // For queries and unknowns, try LLM if available
   switch (intent.type) {
-    case 'query':
-      return handleQuery(intent);
     case 'add':
       return handleAdd(intent);
     case 'compare':
@@ -121,17 +270,64 @@ export async function processUserMessage(input: string): Promise<ChatMessage> {
       return handleTop(intent);
     case 'summarize':
       return handleSummarize(intent);
+    case 'query':
+      return handleQuery(intent, input);
     default:
-      return {
-        id: uuidv4(),
-        role: 'assistant',
-        content: `I didn't understand that. Try:\n- "How much did I spend on groceries in 2023?"\n- "Add $50 for groceries at Wegmans"\n- "Compare 2023 vs 2024"\n- "Top spending categories last year"\n- "Summarize 2024"`,
-        timestamp: new Date(),
-      };
+      return handleFreeform(input);
   }
 }
 
-async function handleQuery(intent: ParsedIntent): Promise<ChatMessage> {
+async function handleFreeform(input: string): Promise<ChatMessage> {
+  const external = await providerManager.getExternalProvider();
+
+  if (external) {
+    try {
+      // Gather context data for the LLM
+      const [categories, monthly, yearly] = await Promise.all([
+        api.getCategoryBreakdown(),
+        api.getMonthlySpending(),
+        api.getYearlySpending(),
+      ]);
+
+      const total = yearly.reduce((s, y) => s + y.total, 0);
+      const recentYear = yearly.length > 0 ? yearly[yearly.length - 1] : null;
+      const top5 = categories.slice(0, 5);
+
+      const context = [
+        `Total lifetime spending: $${total.toLocaleString()}`,
+        `Years of data: ${yearly.length} (${yearly[0]?.year || '?'} - ${yearly[yearly.length - 1]?.year || '?'})`,
+        recentYear ? `Most recent year (${recentYear.year}): $${recentYear.total.toLocaleString()}` : '',
+        `Top categories: ${top5.map(c => `${c.category} ($${c.total.toLocaleString()}, ${c.percentage.toFixed(1)}%)`).join(', ')}`,
+        `Recent months: ${monthly.slice(-6).map(m => `${m.year_month}: $${m.total.toLocaleString()}`).join(', ')}`,
+      ].filter(Boolean).join('\n');
+
+      const response = await external.chat(input, context);
+
+      return {
+        id: uuidv4(),
+        role: 'assistant',
+        content: response,
+        timestamp: new Date(),
+      };
+    } catch (err) {
+      return {
+        id: uuidv4(),
+        role: 'assistant',
+        content: `AI provider error: ${err}. Falling back to local mode.\n\nI didn't understand that. Try:\n- "How much did I spend on groceries in 2023?"\n- "Add $50 for groceries at Wegmans"\n- "Compare 2023 vs 2024"`,
+        timestamp: new Date(),
+      };
+    }
+  }
+
+  return {
+    id: uuidv4(),
+    role: 'assistant',
+    content: `I didn't understand that. Try:\n- "How much did I spend on groceries in 2023?"\n- "Add $50 for groceries at Wegmans"\n- "Compare 2023 vs 2024"\n- "Top spending categories last year"\n- "Summarize 2024"\n\nTip: Enable an AI provider in Settings for richer conversations.`,
+    timestamp: new Date(),
+  };
+}
+
+async function handleQuery(intent: ParsedIntent, originalInput: string): Promise<ChatMessage> {
   try {
     let dateFrom: string | undefined;
     let dateTo: string | undefined;
@@ -153,10 +349,25 @@ async function handleQuery(intent: ParsedIntent): Promise<ChatMessage> {
       const total = monthly.reduce((sum, m) => sum + m.total, 0);
       const periodLabel = intent.period || 'all time';
 
+      // Enrich with LLM if available
+      const external = await providerManager.getExternalProvider();
+      let content = `You spent **$${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}** on **${intent.category}** in **${periodLabel}** across ${monthly.length} months.`;
+
+      if (external && monthly.length > 0) {
+        try {
+          const context = `Category: ${intent.category}, Period: ${periodLabel}, Total: $${total.toFixed(2)}, Monthly breakdown: ${monthly.map(m => `${m.year_month}: $${m.total.toFixed(2)}`).join(', ')}`;
+          const enriched = await external.chat(
+            `The user asked: "${originalInput}". Based on the data, give a brief 1-2 sentence insight about their ${intent.category} spending.`,
+            context,
+          );
+          content += `\n\n${enriched}`;
+        } catch { /* fallback to basic response */ }
+      }
+
       return {
         id: uuidv4(),
         role: 'assistant',
-        content: `You spent **$${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}** on **${intent.category}** in **${periodLabel}** across ${monthly.length} months.`,
+        content,
         data: monthly,
         chart: 'bar',
         timestamp: new Date(),

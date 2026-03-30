@@ -209,9 +209,9 @@ export async function exchangeCodeForToken(
 }
 
 export async function fetchRecentOrders(accessToken: string, maxResults: number = 50): Promise<ExtractedOrder[]> {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const afterDate = thirtyDaysAgo.toISOString().split('T')[0].replace(/-/g, '/');
+  const fourWeeksAgo = new Date();
+  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+  const afterDate = fourWeeksAgo.toISOString().split('T')[0].replace(/-/g, '/');
 
   const query = encodeURIComponent(
     `after:${afterDate} (subject:order OR subject:receipt OR subject:confirmation OR subject:payment OR subject:invoice) -subject:cancel -subject:return`
